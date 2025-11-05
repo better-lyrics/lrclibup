@@ -1,0 +1,11 @@
+[ti:Test Song]
+[ar:Test Artist]
+[al:Test Album]
+[length:03:30]
+
+[00:12.34] First line (standard format)
+[00:15.50][00:45.20][01:15.90] Repeated chorus line
+[00:20.10] Second line (standard format)
+[00:25.30][00:55.60] Another repeated line
+[01:30.00][02:00.50][02:30.75] Triple repeated verse
+[02:45.00] Final line (standard format)
