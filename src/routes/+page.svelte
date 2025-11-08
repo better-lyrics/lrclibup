@@ -2,6 +2,9 @@
 	import { parseLRCFile } from "$lib/lrc";
 	import type { Challenge, FormData, PublishResponse } from "$lib/types";
 	import { onMount } from "svelte";
+	import { validateSyncedLyrics, type LRCValidationResult } from "$lib/lrcValidator";
+	import { normalizeAndSortLRC } from "$lib/lrcNormalizer";
+	import ValidationWarning from "$lib/components/ValidationWarning.svelte";
 
 	let formData: FormData = {
 		trackName: "",
@@ -16,6 +19,9 @@
 	let error: string | null = null;
 	let success = false;
 	let solveProgress = { attempts: 0, nonce: 0, startTime: 0 };
+	let validationResult: LRCValidationResult | null = null;
+	let showValidationWarning = false;
+	let validationOverridden = false; // Track if user clicked "Continue Anyway"
 
 	let errorTimeout: number;
 	let successTimeout: number;
@@ -60,13 +66,69 @@
 
 	async function requestChallenge(): Promise<Challenge> {
 		try {
-			const response = await fetch("https://lrclib.net/api/request-challenge", {
+			const response = await fetch("", {
 				method: "POST",
 			});
 			return await response.json();
 		} catch (err) {
 			throw new Error("Failed to get challenge");
 		}
+	}
+
+	function handleNormalize() {
+		if (!formData.syncedLyrics.trim()) return;
+
+		const result = normalizeAndSortLRC(formData.syncedLyrics);
+		formData.syncedLyrics = result.normalized;
+		formData.plainLyrics = result.plainLyrics; // Update plain lyrics too
+
+		// Re-validate after normalization
+		validationResult = validateSyncedLyrics(formData.syncedLyrics);
+		validationOverridden = false; // Reset override after normalization
+
+		// Check if there are still issues remaining
+		if (!validationResult.isValid) {
+			// Keep warning visible if there are still issues
+			showValidationWarning = true;
+			setError(`Normalized ${result.changes} line${result.changes !== 1 ? "s" : ""} into ${result.expandedLines} separate line${result.expandedLines !== 1 ? "s" : ""}. Please review remaining issues.`);
+		} else {
+			// All issues resolved
+			showValidationWarning = false;
+			setError(`Normalized ${result.changes} line${result.changes !== 1 ? "s" : ""} into ${result.expandedLines} separate line${result.expandedLines !== 1 ? "s" : ""}. No issues remaining!`);
+		}
+	}
+
+	let validationTimeout: number;
+
+	function handleSyncedLyricsChange() {
+		// Debounce validation
+		if (validationTimeout) clearTimeout(validationTimeout);
+		validationTimeout = setTimeout(() => {
+			if (formData.syncedLyrics.trim()) {
+				validationResult = validateSyncedLyrics(formData.syncedLyrics);
+				validationOverridden = false; // Reset override when content changes
+				if (!validationResult.isValid) {
+					showValidationWarning = true;
+				}
+			} else {
+				showValidationWarning = false;
+			}
+		}, 1000) as unknown as number; // Validate 1 second after user stops typing
+	}
+
+	function validateBeforeSubmit(): boolean {
+		// Skip validation if no synced lyrics
+		if (!formData.syncedLyrics.trim()) return true;
+
+		validationResult = validateSyncedLyrics(formData.syncedLyrics);
+
+		if (!validationResult.isValid && validationResult.hasMultiTimestamps) {
+			showValidationWarning = true;
+			isSubmitting = false;
+			return false;
+		}
+
+		return true;
 	}
 
 	async function handleSubmit() {
@@ -76,6 +138,7 @@
 			isSubmitting = true;
 			error = null;
 			success = false;
+			showValidationWarning = false;
 
 			// Validate required fields
 			if (!formData.trackName.trim()) {
@@ -97,6 +160,11 @@
 				}
 			}
 
+			// Validate LRC format
+			if (!validateBeforeSubmit()) {
+				return;
+			}
+
 			// Get challenge
 			const challenge = await requestChallenge();
 
@@ -111,7 +179,7 @@
 				if (!worker) return;
 
 				worker.onmessage = (e) => {
-					const { type, attempts, time, nonce, error } = e.data;
+					const { type, attempts, nonce, error } = e.data;
 
 					if (type === "progress") {
 						solveProgress = {
@@ -253,9 +321,26 @@
 			enhance the database for everyone.
 		</p>
 
+		<!-- Before You Proceed -->
+		<div class="bg-red-50/80 backdrop-blur border border-red-300 rounded-lg p-4 mb-6">
+			<div class="flex items-start gap-3">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5 text-red-600 flex-shrink-0 mt-0.5">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+				</svg>
+				<div class="flex-1">
+					<h3 class="font-bold text-red-800 mb-2 text-base">Before You Proceed</h3>
+					<p class="text-sm text-red-800 leading-relaxed">
+						<strong>LRCLIB does not allow deletion or replacement of lyrics via their API.</strong><br/>Once submitted, lyrics are permanent.
+						Carefully verify all information before publishing.<br/><strong class="mt-1 inline-block">For Better Lyrics users:</strong> changes may take time to propagate - hard refresh
+						your app and clear cache if needed to see updates.
+					</p>
+				</div>
+			</div>
+		</div>
+
 		<form
-			on:submit|preventDefault={handleSubmit}
-			class="space-y-6 rounded-lg shadow-sm"
+			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+			class="space-y-6 rounded-lg"
 		>
 			{#if error || success || isSubmitting}
 				<div class="fixed bottom-4 right-4 flex flex-col gap-2 z-10">
@@ -425,7 +510,7 @@
 							id="lrcFile"
 							accept=".lrc"
 							class="hidden"
-							on:change={async (e) => {
+							onchange={async (e) => {
 								const file = (e.target as HTMLInputElement)?.files?.[0];
 								if (!file) return;
 
@@ -441,6 +526,15 @@
 									plainLyrics: parsed.plainLyrics,
 									syncedLyrics: parsed.syncedLyrics,
 								};
+
+								// Validate uploaded LRC
+								if (parsed.syncedLyrics) {
+									validationResult = validateSyncedLyrics(parsed.syncedLyrics);
+									validationOverridden = false; // Reset override on new file upload
+									if (!validationResult.isValid) {
+										showValidationWarning = true;
+									}
+								}
 							}}
 						/>
 					</div>
@@ -468,6 +562,7 @@
 							<textarea
 								id="syncedLyrics"
 								bind:value={formData.syncedLyrics}
+								oninput={handleSyncedLyricsChange}
 								rows="6"
 								class="w-full px-3 py-2 border border-indigo-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
 								placeholder="[mm:ss.xx] Lyrics line"
@@ -477,17 +572,47 @@
 				</div>
 			</div>
 
+			<!-- Validation Warning -->
+			{#if showValidationWarning && validationResult}
+				<ValidationWarning
+					{validationResult}
+					onNormalize={handleNormalize}
+					onDismiss={() => {
+						showValidationWarning = false;
+						validationOverridden = true; // User chose to continue anyway
+					}}
+				/>
+			{/if}
+
 			<p class="text-sm text-yellow-800 mt-2">
 				<strong>Note:</strong> Publishing involves solving a proof-of-work challenge.
 				This process may take several minutes and could slow down your browser or
 				device.
 			</p>
 
+			<!-- Submit Button Disabled Hint -->
+			{#if !formData.trackName.trim() || !formData.artistName.trim()}
+				<p class="text-sm text-red-600 mt-2 flex items-start gap-1">
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5 flex-shrink-0 mt-[3.25px]">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+					</svg>
+					<span>Please fill in required fields: Track Name and Artist Name</span>
+				</p>
+			{:else if validationResult && !validationResult.isValid && !validationOverridden}
+				<p class="text-sm text-amber-600 mt-2 flex items-start gap-1">
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5 flex-shrink-0 mt-[3.25px]">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+					</svg>
+					<span>Please fix validation issues above or click "Continue Anyway"</span>
+				</p>
+			{/if}
+
 			<button
 				type="submit"
 				disabled={isSubmitting ||
 					!formData.trackName.trim() ||
-					!formData.artistName.trim()}
+					!formData.artistName.trim() ||
+					(validationResult && !validationResult.isValid && !validationOverridden)}
 				class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 			>
 				{isSubmitting

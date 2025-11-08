@@ -1,0 +1,13 @@
+[ti:Combined Issues Test]
+[ar:Test Artist]
+[al:Test Album]
+
+[00:10.00] First line
+[00:15.00][00:45.00][01:15.00] Multi-timestamp chorus
+[00:12.00] Out of order line!
+[00:20.00]
+[00:25.00] Normal line
+[00:25.00] Duplicate timestamp
+[02:00.00] Excessive gap from previous (95 seconds!)
+[02:00.05] Timestamp overlap (50ms)
+[02:10.00] Final line

@@ -1,0 +1,11 @@
+[ti:Duplicate Timestamp Test]
+[ar:Test Artist]
+[al:Test Album]
+
+[00:10.00] First line
+[00:15.00] Second line
+[00:15.00] Duplicate timestamp - same as previous!
+[00:20.00] Fourth line
+[00:20.00] Another duplicate
+[00:20.00] And another one at the same time
+[00:30.00] Final line

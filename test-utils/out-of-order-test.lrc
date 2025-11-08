@@ -1,0 +1,10 @@
+[ti:Out of Order Test]
+[ar:Test Artist]
+[al:Test Album]
+
+[00:10.00] First line
+[00:20.00] Second line
+[00:15.00] This line is out of order!
+[00:25.00] Fourth line
+[00:22.00] This one too!
+[00:30.00] Final line
