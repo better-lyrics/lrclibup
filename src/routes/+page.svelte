@@ -5,6 +5,8 @@
 	import { validateSyncedLyrics, type LRCValidationResult } from "$lib/lrcValidator";
 	import { normalizeAndSortLRC } from "$lib/lrcNormalizer";
 	import ValidationWarning from "$lib/components/ValidationWarning.svelte";
+	import { fade, scale } from "svelte/transition";
+	import {circInOut} from "svelte/easing"
 
 	let formData: FormData = {
 		trackName: "",
@@ -22,6 +24,8 @@
 	let validationResult: LRCValidationResult | null = null;
 	let showValidationWarning = false;
 	let validationOverridden = false; // Track if user clicked "Continue Anyway"
+	let isDragging = false; // Track drag state for visual feedback
+	let dragCounter = 0; // Track nested drag events
 
 	let errorTimeout: number;
 	let successTimeout: number;
@@ -217,7 +221,7 @@
 				}),
 			});
 
-			const data = await response.json();
+			const data: PublishResponse = await response.json();
 
 			if (!response.ok) {
 				throw new Error(data.message || "Failed to publish lyrics");
@@ -261,6 +265,75 @@
 			return `${(hashRate / 1000).toFixed(1)}K`;
 		}
 		return hashRate.toString();
+	}
+
+	async function handleFileDrop(file: File) {
+		// Only accept .lrc files
+		if (!file.name.endsWith('.lrc')) {
+			setError('Only .lrc files are accepted');
+			return;
+		}
+
+		const content = await file.text();
+		const parsed = parseLRCFile(content);
+
+		formData = {
+			...formData,
+			trackName: parsed.title || formData.trackName,
+			artistName: parsed.artist || formData.artistName,
+			albumName: parsed.album || formData.albumName,
+			duration: parsed.duration || formData.duration,
+			plainLyrics: parsed.plainLyrics,
+			syncedLyrics: parsed.syncedLyrics,
+		};
+
+		// Validate uploaded LRC
+		if (parsed.syncedLyrics) {
+			validationResult = validateSyncedLyrics(parsed.syncedLyrics);
+			validationOverridden = false;
+			if (!validationResult.isValid) {
+				showValidationWarning = true;
+			}
+		}
+	}
+
+	function handleDragEnter(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounter++;
+		if (e.dataTransfer?.types.includes('Files')) {
+			isDragging = true;
+		}
+	}
+
+	function handleDragLeave(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounter--;
+		if (dragCounter === 0) {
+			isDragging = false;
+		}
+	}
+
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'copy';
+		}
+	}
+
+	async function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		isDragging = false;
+		dragCounter = 0;
+
+		const files = e.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+
+		const file = files[0];
+		await handleFileDrop(file);
 	}
 </script>
 
@@ -482,9 +555,36 @@
 				</div>
 
 				<div
-					class="space-y-4 p-4 border border-dashed border-indigo-300 rounded-lg bg-indigo-50/50"
+					role="region"
+					aria-label="Lyrics input with drag and drop support"
+					class="space-y-4 p-4 border border-dashed rounded-lg transition-all overflow-hidden duration-200 relative {isDragging ? 'border-indigo-500 bg-indigo-100 shadow-sm' : 'border-indigo-300 bg-indigo-50/50'}"
+					ondragenter={handleDragEnter}
+					ondragleave={handleDragLeave}
+					ondragover={handleDragOver}
+					ondrop={handleDrop}
 				>
-					<div class="flex items-center gap-4">
+					{#if isDragging}
+						<div
+							class="absolute inset-0 bg-indigo-900/30 pointer-events-none flex items-center justify-center z-10"
+							transition:fade={{ duration: 200,easing: circInOut }}
+						>
+							<div
+								class="bg-white/90 px-6 py-4 rounded-lg shadow-lg border-2 border-indigo-500 border-dashed backdrop-blur-sm"
+								transition:scale={{ duration: 150, start: 0.9,easing: circInOut }}
+							>
+								<div class="flex items-center gap-3 text-indigo-700">
+									<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-8">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+									</svg>
+									<div>
+										<p class="font-semibold text-lg">Drop .lrc file here</p>
+										<p class="text-sm text-indigo-600">Release to upload</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					{/if}
+					<div class="flex items-center gap-4 !mt-0">
 						<h3 class="text-lg font-semibold">Lyrics Input</h3>
 						<label
 							for="lrcFile"
