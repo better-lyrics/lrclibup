@@ -66,7 +66,7 @@
 
 	async function requestChallenge(): Promise<Challenge> {
 		try {
-			const response = await fetch("", {
+			const response = await fetch("https://lrclib.net/api/request-challenge", {
 				method: "POST",
 			});
 			return await response.json();
