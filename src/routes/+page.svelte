@@ -3,7 +3,7 @@
 	import type { Challenge, FormData, PublishResponse } from "$lib/types";
 	import { onMount } from "svelte";
 	import { validateSyncedLyrics, type LRCValidationResult } from "$lib/lrcValidator";
-	import { normalizeAndSortLRC } from "$lib/lrcNormalizer";
+	import { normalizeAndSortLRC, stripELRCWordTimestamps } from "$lib/lrcNormalizer";
 	import ValidationWarning from "$lib/components/ValidationWarning.svelte";
 	import { fade, scale } from "svelte/transition";
 	import {circInOut} from "svelte/easing"
@@ -102,6 +102,29 @@
 		}
 	}
 
+	function handleStripELRC() {
+		if (!formData.syncedLyrics.trim()) return;
+
+		const result = stripELRCWordTimestamps(formData.syncedLyrics);
+		formData.syncedLyrics = result.stripped;
+		formData.plainLyrics = result.plainLyrics; // Update plain lyrics too
+
+		// Re-validate after stripping
+		validationResult = validateSyncedLyrics(formData.syncedLyrics);
+		validationOverridden = false; // Reset override after stripping
+
+		// Check if there are still issues remaining
+		if (!validationResult.isValid) {
+			// Keep warning visible if there are still issues
+			showValidationWarning = true;
+			setError(`Stripped ELRC word timestamps from ${result.linesAffected} line${result.linesAffected !== 1 ? "s" : ""}. Please review remaining issues.`);
+		} else {
+			// All issues resolved
+			showValidationWarning = false;
+			setError(`Stripped ELRC word timestamps from ${result.linesAffected} line${result.linesAffected !== 1 ? "s" : ""}. No issues remaining!`);
+		}
+	}
+
 	let validationTimeout: number;
 
 	function handleSyncedLyricsChange() {
@@ -125,6 +148,13 @@
 		if (!formData.syncedLyrics.trim()) return true;
 
 		validationResult = validateSyncedLyrics(formData.syncedLyrics);
+
+		// Block submission if ELRC word timestamps detected (error)
+		if (validationResult.hasELRC) {
+			showValidationWarning = true;
+			isSubmitting = false;
+			return false;
+		}
 
 		if (!validationResult.isValid && validationResult.hasMultiTimestamps) {
 			showValidationWarning = true;
@@ -677,6 +707,7 @@
 				<ValidationWarning
 					{validationResult}
 					onNormalize={handleNormalize}
+					onStripELRC={handleStripELRC}
 					onDismiss={() => {
 						showValidationWarning = false;
 						validationOverridden = true; // User chose to continue anyway
@@ -698,6 +729,13 @@
 					</svg>
 					<span>Please fill in required fields: Track Name and Artist Name</span>
 				</p>
+			{:else if validationResult && validationResult.hasELRC}
+				<p class="text-sm text-red-600 mt-2 flex items-start gap-1">
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5 flex-shrink-0 mt-[3.25px]">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+					</svg>
+					<span>ELRC word timestamps detected. Please strip them using the button above.</span>
+				</p>
 			{:else if validationResult && !validationResult.isValid && !validationOverridden}
 				<p class="text-sm text-amber-600 mt-2 flex items-start gap-1">
 					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5 flex-shrink-0 mt-[3.25px]">
@@ -712,6 +750,7 @@
 				disabled={isSubmitting ||
 					!formData.trackName.trim() ||
 					!formData.artistName.trim() ||
+					(validationResult && validationResult.hasELRC) ||
 					(validationResult && !validationResult.isValid && !validationOverridden)}
 				class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 			>

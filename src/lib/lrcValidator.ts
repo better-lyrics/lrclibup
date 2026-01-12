@@ -12,7 +12,8 @@ export type IssueType =
   | "duplicate-timestamp"
   | "excessive-gap"
   | "timestamp-overlap"
-  | "no-timestamps";
+  | "no-timestamps"
+  | "elrc-word-timing";
 
 export interface LRCValidationIssue {
   line: number;
@@ -28,6 +29,7 @@ export interface LRCValidationResult {
   isValid: boolean;
   issues: LRCValidationIssue[];
   hasMultiTimestamps: boolean;
+  hasELRC: boolean;
   hasErrors: boolean;
   hasWarnings: boolean;
   totalLines: number;
@@ -50,6 +52,9 @@ const PATTERNS = {
 
   // Metadata tags
   METADATA: /^\[(ti|ar|al|length|offset):/i,
+
+  // ELRC word-level timestamps: <mm:ss.xx> or <mm:ss.xxx> (also handles single-digit minutes)
+  ELRC_WORD_TIMING: /<\d{1,2}:\d{2}\.\d{2,3}>/g,
 };
 
 /**
@@ -77,6 +82,7 @@ export function validateLRC(content: string): LRCValidationResult {
   const lines = content.split("\n");
   const issues: LRCValidationIssue[] = [];
   let multiTimestampCount = 0;
+  let elrcCount = 0;
 
   const timedLines: Array<{ timestamp: number; line: number; raw: string }> =
     [];
@@ -88,6 +94,21 @@ export function validateLRC(content: string): LRCValidationResult {
 
     // Skip metadata lines
     if (PATTERNS.METADATA.test(line)) return;
+
+    // Check for ELRC word-level timestamps
+    const elrcMatches = Array.from(line.matchAll(PATTERNS.ELRC_WORD_TIMING));
+    if (elrcMatches.length > 0) {
+      elrcCount++;
+      issues.push({
+        line: index + 1,
+        type: "elrc-word-timing",
+        severity: "error",
+        message: `Contains ${elrcMatches.length} ELRC word timestamp${elrcMatches.length > 1 ? "s" : ""} (not supported by LRCLIB)`,
+        raw: line,
+        timestamps: elrcMatches.map((m) => m[0]),
+        suggestion: "Use auto-fix to strip word timestamps while keeping line timestamps",
+      });
+    }
 
     // Check if line contains timestamps
     const timestamps = Array.from(line.matchAll(PATTERNS.ALL_TIMESTAMPS));
@@ -251,6 +272,7 @@ export function validateLRC(content: string): LRCValidationResult {
     "excessive-gap": 0,
     "timestamp-overlap": 0,
     "no-timestamps": 0,
+    "elrc-word-timing": 0,
   };
 
   issues.forEach((issue) => {
@@ -264,6 +286,7 @@ export function validateLRC(content: string): LRCValidationResult {
     isValid: issues.length === 0,
     issues,
     hasMultiTimestamps: multiTimestampCount > 0,
+    hasELRC: elrcCount > 0,
     hasErrors,
     hasWarnings,
     totalLines: lines.filter((l) => l.trim()).length,
@@ -333,6 +356,7 @@ export function getIssueTypeLabel(type: IssueType): string {
     "excessive-gap": "Excessive Gap",
     "timestamp-overlap": "Timestamp Overlap",
     "no-timestamps": "No LRC Timestamps Found",
+    "elrc-word-timing": "ELRC Word Timestamps",
   };
 
   return labels[type] || type;

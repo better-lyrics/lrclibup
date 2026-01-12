@@ -10,6 +10,12 @@ export interface NormalizationResult {
   expandedLines: number;
 }
 
+export interface ELRCStrippingResult {
+  stripped: string;
+  plainLyrics: string;
+  linesAffected: number;
+}
+
 /**
  * Regex for extracting timestamps and lyrics
  */
@@ -189,5 +195,69 @@ export function normalizeAndSortLRC(content: string): NormalizationResult {
     ...normalizeResult,
     normalized: sorted,
     plainLyrics,
+  };
+}
+
+/**
+ * Strips ELRC word-level timestamps from synced lyrics
+ * Preserves line-level timestamps [mm:ss.xx] while removing <mm:ss.xx> word timestamps
+ *
+ * Example transformation:
+ * Input:  [00:12.34] <00:12.34>Hello <00:12.78>world <00:13.05>how <00:13.45>are <00:13.89>you
+ * Output: [00:12.34] Hello world how are you
+ *
+ * @param content - Raw LRC/ELRC content
+ * @returns Stripped content with statistics
+ */
+export function stripELRCWordTimestamps(content: string): ELRCStrippingResult {
+  const lines = content.split("\n");
+  const strippedLines: string[] = [];
+  let linesAffected = 0;
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+
+    // Preserve empty lines and metadata
+    if (!line || /^\[(ti|ar|al|length|offset):/i.test(line)) {
+      strippedLines.push(line);
+      return;
+    }
+
+    // Check if line has ELRC word timestamps
+    const elrcPattern = /<\d{1,2}:\d{2}\.\d{2,3}>/g;
+    if (elrcPattern.test(line)) {
+      linesAffected++;
+      // Remove all ELRC word timestamps and clean up extra whitespace
+      const stripped = line
+        .replace(/<\d{1,2}:\d{2}\.\d{2,3}>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      strippedLines.push(stripped);
+    } else {
+      strippedLines.push(line);
+    }
+  });
+
+  const stripped = strippedLines.join("\n");
+
+  // Extract plain lyrics from the stripped content
+  const plainLines: string[] = [];
+  strippedLines.forEach((line) => {
+    if (!line) return;
+    if (/^\[(ti|ar|al|length|offset):/i.test(line)) return;
+
+    const match = line.match(/^\[\d{2}:\d{2}\.\d{2,3}\](.*)$/);
+    if (match) {
+      const lyrics = match[1].trim();
+      if (lyrics) {
+        plainLines.push(lyrics);
+      }
+    }
+  });
+
+  return {
+    stripped,
+    plainLyrics: plainLines.join("\n"),
+    linesAffected,
   };
 }
