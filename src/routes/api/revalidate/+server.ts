@@ -34,7 +34,19 @@ export const POST: RequestHandler = async ({ request }) => {
       },
     });
 
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Upstream API error: ${response.status} - ${text}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      throw new Error('Upstream API did not return JSON');
+    }
+
     const result = await response.json();
+
 
     return new Response(JSON.stringify(result), {
       status: response.status,
