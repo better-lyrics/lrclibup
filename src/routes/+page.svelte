@@ -7,6 +7,7 @@
 	import ValidationWarning from "$lib/components/ValidationWarning.svelte";
 	import { fade, scale } from "svelte/transition";
 	import {circInOut} from "svelte/easing"
+	import { env } from "$env/dynamic/public";
 
 	let formData: FormData = {
 		trackName: "",
@@ -26,6 +27,8 @@
 	let validationOverridden = false; // Track if user clicked "Continue Anyway"
 	let isDragging = false; // Track drag state for visual feedback
 	let dragCounter = 0; // Track nested drag events
+	let videoId: string | null = null;
+	let revalidating = false;
 
 	let errorTimeout: number;
 	let successTimeout: number;
@@ -61,11 +64,13 @@
 		const artistParam = urlParams.get("artist");
 		const albumParam = urlParams.get("album");
 		const durationParam = urlParams.get("duration");
+		const videoIdParam = urlParams.get("videoId");
 
 		if (titleParam) formData.trackName = decodeURIComponent(titleParam);
 		if (artistParam) formData.artistName = decodeURIComponent(artistParam);
 		if (albumParam) formData.albumName = decodeURIComponent(albumParam);
 		if (durationParam) formData.duration = decodeURIComponent(durationParam);
+		if (videoIdParam) videoId = decodeURIComponent(videoIdParam);
 	});
 
 	async function requestChallenge(): Promise<Challenge> {
@@ -76,6 +81,90 @@
 			return await response.json();
 		} catch (err) {
 			throw new Error("Failed to get challenge");
+		}
+	}
+
+	function waitForTurnstile(): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (typeof window.turnstile !== "undefined") {
+				resolve();
+				return;
+			}
+			const timeout = setTimeout(() => {
+				clearInterval(interval);
+				reject(new Error("Turnstile script failed to load"));
+			}, 10_000);
+			const interval = setInterval(() => {
+				if (typeof window.turnstile !== "undefined") {
+					clearInterval(interval);
+					clearTimeout(timeout);
+					resolve();
+				}
+			}, 100);
+		});
+	}
+
+	async function getTurnstileToken(): Promise<string> {
+		const sitekey = env.PUBLIC_TURNSTILE_SITE_KEY;
+		if (!sitekey) {
+			throw new Error("Turnstile not configured");
+		}
+
+		await waitForTurnstile();
+
+		return new Promise((resolve, reject) => {
+			const container = document.createElement("div");
+			container.style.display = "none";
+			document.body.appendChild(container);
+
+			const timeout = setTimeout(() => {
+				container.remove();
+				reject(new Error("Turnstile render timeout"));
+			}, 30_000);
+
+			// @ts-ignore - turnstile is loaded via script tag
+			window.turnstile.render(container, {
+				sitekey,
+				callback: (token: string) => {
+					clearTimeout(timeout);
+					container.remove();
+					resolve(token);
+				},
+				"error-callback": () => {
+					clearTimeout(timeout);
+					container.remove();
+					reject(new Error("Turnstile challenge failed"));
+				},
+				size: "invisible",
+			});
+		});
+	}
+
+	async function revalidateCache(metadata: { song: string; artist: string; album: string; duration: string }) {
+		if (!videoId) return;
+
+		try {
+			revalidating = true;
+			const turnstileToken = await getTurnstileToken();
+
+			await fetch("/api/revalidate", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"turnstile-token": turnstileToken,
+				},
+				body: JSON.stringify({
+					videoId,
+					song: metadata.song,
+					artist: metadata.artist,
+					album: metadata.album,
+					duration: metadata.duration || undefined,
+				}),
+			});
+		} catch (err) {
+			console.error("Cache revalidation failed:", err);
+		} finally {
+			revalidating = false;
 		}
 	}
 
@@ -258,6 +347,19 @@
 			}
 
 			setSuccess();
+
+			// Capture metadata before resetting form
+			const publishedMetadata = {
+				song: formData.trackName,
+				artist: formData.artistName,
+				album: formData.albumName,
+				duration: formData.duration,
+			};
+
+			// Trigger cache revalidation in the background if videoId is present
+			if (videoId) {
+				revalidateCache(publishedMetadata);
+			}
 
 			// Reset form after successful submission
 			formData = {
@@ -533,6 +635,22 @@
 			{/if}
 
 			<div class="space-y-4">
+				<div>
+					<label for="videoId" class="block text-sm font-medium mb-1">
+						YouTube Video ID
+					</label>
+					<input
+						type="text"
+						id="videoId"
+						bind:value={videoId}
+						placeholder="e.g. dQw4w9WgXcQ"
+						class="w-full px-3 py-2 border border-indigo-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+					/>
+					<p class="mt-1 text-sm text-indigo-600">
+						If provided, the Better Lyrics cache for this video will be refreshed after publishing
+					</p>
+				</div>
+
 				<div>
 					<label for="trackName" class="block text-sm font-medium mb-1">
 						Track Name *
