@@ -636,6 +636,22 @@
 
 			<div class="space-y-4">
 				<div>
+					<label for="videoId" class="block text-sm font-medium mb-1">
+						YouTube Video ID
+					</label>
+					<input
+						type="text"
+						id="videoId"
+						bind:value={videoId}
+						placeholder="e.g. dQw4w9WgXcQ"
+						class="w-full px-3 py-2 border border-indigo-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+					/>
+					<p class="mt-1 text-sm text-indigo-600">
+						If provided, the Better Lyrics cache for this video will be refreshed after publishing
+					</p>
+				</div>
+
+				<div>
 					<label for="trackName" class="block text-sm font-medium mb-1">
 						Track Name *
 					</label>
