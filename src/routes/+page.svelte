@@ -84,14 +84,35 @@
 		}
 	}
 
-	function getTurnstileToken(): Promise<string> {
+	function waitForTurnstile(): Promise<void> {
 		return new Promise((resolve, reject) => {
-			const sitekey = env.PUBLIC_TURNSTILE_SITE_KEY;
-			if (!sitekey || typeof window.turnstile === "undefined") {
-				reject(new Error("Turnstile not configured"));
+			if (typeof window.turnstile !== "undefined") {
+				resolve();
 				return;
 			}
+			const timeout = setTimeout(() => {
+				clearInterval(interval);
+				reject(new Error("Turnstile script failed to load"));
+			}, 10_000);
+			const interval = setInterval(() => {
+				if (typeof window.turnstile !== "undefined") {
+					clearInterval(interval);
+					clearTimeout(timeout);
+					resolve();
+				}
+			}, 100);
+		});
+	}
 
+	async function getTurnstileToken(): Promise<string> {
+		const sitekey = env.PUBLIC_TURNSTILE_SITE_KEY;
+		if (!sitekey) {
+			throw new Error("Turnstile not configured");
+		}
+
+		await waitForTurnstile();
+
+		return new Promise((resolve, reject) => {
 			const container = document.createElement("div");
 			container.style.display = "none";
 			document.body.appendChild(container);
