@@ -117,14 +117,21 @@
 			container.style.display = "none";
 			document.body.appendChild(container);
 
+			const timeout = setTimeout(() => {
+				container.remove();
+				reject(new Error("Turnstile render timeout"));
+			}, 30_000);
+
 			// @ts-ignore - turnstile is loaded via script tag
 			window.turnstile.render(container, {
 				sitekey,
 				callback: (token: string) => {
+					clearTimeout(timeout);
 					container.remove();
 					resolve(token);
 				},
 				"error-callback": () => {
+					clearTimeout(timeout);
 					container.remove();
 					reject(new Error("Turnstile challenge failed"));
 				},
