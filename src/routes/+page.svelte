@@ -29,9 +29,11 @@
 	let dragCounter = 0; // Track nested drag events
 	let videoId: string | null = null;
 	let revalidating = false;
+	let revalidateSuccess: boolean | null = null;
 
 	let errorTimeout: number;
 	let successTimeout: number;
+	let revalidateTimeout: number;
 
 	function setError(message: string) {
 		error = message;
@@ -86,7 +88,7 @@
 
 	function waitForTurnstile(): Promise<void> {
 		return new Promise((resolve, reject) => {
-			if (typeof window.turnstile !== "undefined") {
+			if (typeof (window as any).turnstile !== "undefined") {
 				resolve();
 				return;
 			}
@@ -95,7 +97,7 @@
 				reject(new Error("Turnstile script failed to load"));
 			}, 10_000);
 			const interval = setInterval(() => {
-				if (typeof window.turnstile !== "undefined") {
+				if (typeof (window as any).turnstile !== "undefined") {
 					clearInterval(interval);
 					clearTimeout(timeout);
 					resolve();
@@ -123,7 +125,7 @@
 			}, 30_000);
 
 			// @ts-ignore - turnstile is loaded via script tag
-			window.turnstile.render(container, {
+			(window as any).turnstile.render(container, {
 				sitekey,
 				callback: (token: string) => {
 					clearTimeout(timeout);
@@ -147,24 +149,30 @@
 			revalidating = true;
 			const turnstileToken = await getTurnstileToken();
 
-			await fetch("/api/revalidate", {
+			const url = new URL("https://lyrics.api.dacubeking.com/revalidate");
+			url.searchParams.set("videoId", videoId);
+			if (metadata.song) url.searchParams.set("song", metadata.song);
+			if (metadata.artist) url.searchParams.set("artist", metadata.artist);
+			if (metadata.album) url.searchParams.set("album", metadata.album);
+			if (metadata.duration) url.searchParams.set("duration", metadata.duration);
+
+			const res = await fetch(url.toString(), {
 				method: "POST",
 				headers: {
-					"Content-Type": "application/json",
 					"turnstile-token": turnstileToken,
 				},
-				body: JSON.stringify({
-					videoId,
-					song: metadata.song,
-					artist: metadata.artist,
-					album: metadata.album,
-					duration: metadata.duration || undefined,
-				}),
 			});
+			if (!res.ok) throw new Error(`Revalidation failed: ${res.status}`);
+			revalidateSuccess = true;
 		} catch (err) {
 			console.error("Cache revalidation failed:", err);
+			revalidateSuccess = false;
 		} finally {
 			revalidating = false;
+			if (revalidateTimeout) clearTimeout(revalidateTimeout);
+			revalidateTimeout = setTimeout(() => {
+				revalidateSuccess = null;
+			}, 5000) as unknown as number;
 		}
 	}
 
@@ -547,7 +555,7 @@
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
 			class="space-y-6 rounded-lg"
 		>
-			{#if error || success || isSubmitting}
+			{#if error || success || isSubmitting || revalidateSuccess !== null}
 				<div class="fixed bottom-4 right-4 flex flex-col gap-2 z-10">
 					{#if error}
 						<div
@@ -592,6 +600,48 @@
 							</svg>
 
 							Lyrics published successfully!
+						</div>
+					{/if}
+
+					{#if revalidateSuccess === true}
+						<div
+							class="bg-white p-4 rounded-lg shadow-lg border border-green-200 flex items-center gap-2 text-green-700 animate-fade-in pr-5"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+								/>
+							</svg>
+							Cache revalidated
+						</div>
+					{:else if revalidateSuccess === false}
+						<div
+							class="bg-white p-4 rounded-lg shadow-lg border border-amber-200 flex items-center gap-2 text-amber-700 animate-fade-in pr-5"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+								/>
+							</svg>
+							Cache revalidation failed
 						</div>
 					{/if}
 
