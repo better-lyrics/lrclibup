@@ -30,6 +30,7 @@
 	let videoId: string | null = null;
 	let revalidating = false;
 	let revalidateSuccess: boolean | null = null;
+	let turnstileToken: string | null = null;
 
 	let errorTimeout: number;
 	let successTimeout: number;
@@ -52,6 +53,9 @@
 	}
 
 	onMount(() => {
+		(window as any).onTurnstileCallback = onTurnstileCallback;
+		(window as any).onTurnstileError = onTurnstileError;
+		(window as any).onTurnstileExpired = onTurnstileExpired;
 		// @ts-ignore
 		window.publishProgress = (attempts: number, nonce: number) => {
 			solveProgress = {
@@ -86,63 +90,33 @@
 		}
 	}
 
-	function waitForTurnstile(): Promise<void> {
-		return new Promise((resolve, reject) => {
-			if (typeof (window as any).turnstile !== "undefined") {
-				resolve();
-				return;
-			}
-			const timeout = setTimeout(() => {
-				clearInterval(interval);
-				reject(new Error("Turnstile script failed to load"));
-			}, 10_000);
-			const interval = setInterval(() => {
-				if (typeof (window as any).turnstile !== "undefined") {
-					clearInterval(interval);
-					clearTimeout(timeout);
-					resolve();
-				}
-			}, 100);
-		});
+	function onTurnstileCallback(token: string) {
+		turnstileToken = token;
 	}
 
-	async function getTurnstileToken(): Promise<string> {
-		const sitekey = env.PUBLIC_TURNSTILE_SITE_KEY;
-		if (!sitekey) {
-			throw new Error("Turnstile not configured");
-		}
+	function onTurnstileError(errorCode: string) {
+		console.error("Turnstile challenge failed:", errorCode);
+		turnstileToken = null;
+	}
 
-		await waitForTurnstile();
+	function onTurnstileExpired() {
+		turnstileToken = null;
+	}
 
+	function waitForTurnstileToken(): Promise<string> {
+		if (turnstileToken) return Promise.resolve(turnstileToken);
 		return new Promise((resolve, reject) => {
-			const container = document.createElement("div");
-			container.style.position = "fixed";
-			container.style.left = "-9999px";
-			container.style.top = "-9999px";
-			document.body.appendChild(container);
-
 			const timeout = setTimeout(() => {
-				container.remove();
-				reject(new Error("Turnstile render timeout"));
+				clearInterval(interval);
+				reject(new Error("Turnstile token timeout"));
 			}, 30_000);
-
-			// @ts-ignore - turnstile is loaded via script tag
-			(window as any).turnstile.render(container, {
-				sitekey,
-				callback: (token: string) => {
+			const interval = setInterval(() => {
+				if (turnstileToken) {
+					clearInterval(interval);
 					clearTimeout(timeout);
-					container.remove();
-					resolve(token);
-				},
-				"error-callback": (errorCode: string) => {
-					clearTimeout(timeout);
-					container.remove();
-					const err = new Error(`Turnstile challenge failed: ${errorCode}`);
-					console.error(err.message, err.stack);
-					reject(err);
-				},
-				size: "invisible",
-			});
+					resolve(turnstileToken);
+				}
+			}, 200);
 		});
 	}
 
@@ -151,7 +125,9 @@
 
 		try {
 			revalidating = true;
-			const turnstileToken = await getTurnstileToken();
+			const token = await waitForTurnstileToken();
+			turnstileToken = null;
+			(window as any).turnstile?.reset();
 
 			const url = new URL("https://lyrics.api.dacubeking.com/revalidate");
 			url.searchParams.set("videoId", videoId);
@@ -163,7 +139,7 @@
 			const res = await fetch(url.toString(), {
 				method: "POST",
 				headers: {
-					"turnstile-token": turnstileToken,
+					"turnstile-token": token,
 				},
 			});
 			if (!res.ok) throw new Error(`Revalidation failed: ${res.status}`);
@@ -941,4 +917,14 @@
 			</button>
 		</form>
 	</div>
+	{#if env.PUBLIC_TURNSTILE_SITE_KEY}
+		<div
+			class="cf-turnstile"
+			data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY}
+			data-callback="onTurnstileCallback"
+			data-error-callback="onTurnstileError"
+			data-expired-callback="onTurnstileExpired"
+			data-size="invisible"
+		></div>
+	{/if}
 </div>
