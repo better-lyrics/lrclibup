@@ -555,7 +555,7 @@
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
 			class="space-y-6 rounded-lg"
 		>
-			{#if error || success || isSubmitting || revalidateSuccess !== null}
+			{#if error || success || isSubmitting || revalidating || revalidateSuccess !== null}
 				<div class="fixed bottom-4 right-4 flex flex-col gap-2 z-10">
 					{#if error}
 						<div
@@ -603,7 +603,16 @@
 						</div>
 					{/if}
 
-					{#if revalidateSuccess === true}
+					{#if revalidating}
+						<div
+							class="bg-white p-4 rounded-lg shadow-lg border border-indigo-200 flex items-center gap-2 text-indigo-700 animate-fade-in pr-5"
+						>
+							<div
+								class="animate-spin rounded-full size-5 border-2 border-indigo-600 border-t-transparent"
+							></div>
+							Revalidating cache...
+						</div>
+					{:else if revalidateSuccess === true}
 						<div
 							class="bg-white p-4 rounded-lg shadow-lg border border-green-200 flex items-center gap-2 text-green-700 animate-fade-in pr-5"
 						>
