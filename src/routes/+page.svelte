@@ -29,7 +29,7 @@
 	let dragCounter = 0; // Track nested drag events
 	let videoId: string | null = null;
 	let revalidating = false;
-	let revalidateSuccess: boolean | null = null;
+	let revalidateStatus: "updated" | "same" | "failed" | null = null;
 	let turnstileToken: string | null = null;
 
 	let errorTimeout: number;
@@ -143,15 +143,17 @@
 				},
 			});
 			if (!res.ok) throw new Error(`Revalidation failed: ${res.status}`);
-			revalidateSuccess = true;
+			const data = await res.json();
+			const lrclibAction = data?.status?.lrclib?.action;
+			revalidateStatus = lrclibAction === "updated" ? "updated" : lrclibAction === "same" ? "same" : "failed";
 		} catch (err) {
 			console.error("Cache revalidation failed:", err);
-			revalidateSuccess = false;
+			revalidateStatus = "failed";
 		} finally {
 			revalidating = false;
 			if (revalidateTimeout) clearTimeout(revalidateTimeout);
 			revalidateTimeout = setTimeout(() => {
-				revalidateSuccess = null;
+				revalidateStatus = null;
 			}, 5000) as unknown as number;
 		}
 	}
@@ -535,7 +537,7 @@
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
 			class="space-y-6 rounded-lg"
 		>
-			{#if error || success || isSubmitting || revalidating || revalidateSuccess !== null}
+			{#if error || success || isSubmitting || revalidating || revalidateStatus !== null}
 				<div class="fixed bottom-4 right-4 flex flex-col gap-2 z-10">
 					{#if error}
 						<div
@@ -592,43 +594,30 @@
 							></div>
 							Revalidating cache...
 						</div>
-					{:else if revalidateSuccess === true}
+					{:else if revalidateStatus === "updated"}
 						<div
 							class="bg-white p-4 rounded-lg shadow-lg border border-green-200 flex items-center gap-2 text-green-700 animate-fade-in pr-5"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="2"
-								stroke="currentColor"
-								class="size-5"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-								/>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 							</svg>
-							Cache revalidated
+							Cache updated with new lyrics
 						</div>
-					{:else if revalidateSuccess === false}
+					{:else if revalidateStatus === "same"}
 						<div
 							class="bg-white p-4 rounded-lg shadow-lg border border-amber-200 flex items-center gap-2 text-amber-700 animate-fade-in pr-5"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="2"
-								stroke="currentColor"
-								class="size-5"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
-								/>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+							</svg>
+							Cache unchanged — same lyrics fetched
+						</div>
+					{:else if revalidateStatus === "failed"}
+						<div
+							class="bg-white p-4 rounded-lg shadow-lg border border-red-200 flex items-center gap-2 text-red-700 animate-fade-in pr-5"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 							</svg>
 							Cache revalidation failed
 						</div>
