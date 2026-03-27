@@ -116,7 +116,9 @@
 
 		return new Promise((resolve, reject) => {
 			const container = document.createElement("div");
-			container.style.display = "none";
+			container.style.position = "fixed";
+			container.style.left = "-9999px";
+			container.style.top = "-9999px";
 			document.body.appendChild(container);
 
 			const timeout = setTimeout(() => {
