@@ -132,10 +132,12 @@
 					container.remove();
 					resolve(token);
 				},
-				"error-callback": () => {
+				"error-callback": (errorCode: string) => {
 					clearTimeout(timeout);
 					container.remove();
-					reject(new Error("Turnstile challenge failed"));
+					const err = new Error(`Turnstile challenge failed: ${errorCode}`);
+					console.error(err.message, err.stack);
+					reject(err);
 				},
 				size: "invisible",
 			});
