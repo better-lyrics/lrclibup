@@ -729,6 +729,11 @@
 						type="number"
 						id="duration"
 						bind:value={formData.duration}
+						onblur={() => {
+							if (!formData.duration) return;
+							const parsed = Number.parseFloat(String(formData.duration).replace(",", "."));
+							if (Number.isFinite(parsed)) formData.duration = Math.round(parsed).toString();
+						}}
 						min="0"
 						step="1"
 						class="w-full px-3 py-2 border border-indigo-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
