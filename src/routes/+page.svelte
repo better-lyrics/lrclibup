@@ -75,7 +75,11 @@
 		if (titleParam) formData.trackName = decodeURIComponent(titleParam);
 		if (artistParam) formData.artistName = decodeURIComponent(artistParam);
 		if (albumParam) formData.albumName = decodeURIComponent(albumParam);
-		if (durationParam) formData.duration = decodeURIComponent(durationParam);
+		if (durationParam) {
+			const decoded = decodeURIComponent(durationParam);
+			const parsed = Number.parseFloat(decoded.replace(",", "."));
+			formData.duration = Number.isFinite(parsed) ? Math.round(parsed).toString() : decoded;
+		}
 		if (videoIdParam) videoId = decodeURIComponent(videoIdParam);
 	});
 
@@ -726,6 +730,7 @@
 						id="duration"
 						bind:value={formData.duration}
 						min="0"
+						step="1"
 						class="w-full px-3 py-2 border border-indigo-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
 					/>
 				</div>
