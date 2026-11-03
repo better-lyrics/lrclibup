@@ -529,8 +529,8 @@
 				<div class="flex-1">
 					<h3 class="font-bold text-red-800 mb-2 text-base">Before You Proceed</h3>
 					<p class="text-sm text-red-800 leading-relaxed">
-						<strong>LRCLIB does not allow deletion or replacement of lyrics via their API.</strong><br/>Once submitted, lyrics are permanent.
-						Carefully verify all information before publishing.<br/><strong class="mt-1 inline-block">For Better Lyrics users:</strong> changes may take time to propagate - hard refresh
+						<strong>LRCLIB does not allow deletion of lyrics via their API.</strong><br/>Publishing again with the same track, artist, album, and a duration within 2 seconds replaces the current lyrics, and earlier revisions are kept.
+						Different metadata creates a separate track, so carefully verify all information before publishing.<br/><strong class="mt-1 inline-block">For Better Lyrics users:</strong> changes may take time to propagate - hard refresh
 						your app and clear cache if needed to see updates.
 					</p>
 				</div>
