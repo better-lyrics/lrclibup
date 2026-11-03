@@ -463,6 +463,26 @@
 	}
 </script>
 
+<div role="note" class="bg-amber-100 border-b border-amber-300 text-amber-900">
+	<div class="px-6 py-3">
+		<p class="text-sm leading-relaxed text-center">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="inline size-5 text-amber-600 align-text-bottom mr-1" aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.75Z" />
+			</svg>
+			<strong>LRCLIBup is deprecated.</strong>
+			Better Lyrics now has its own lyrics platform,
+			<a href="https://unison.betterlyrics.org" target="_blank" rel="noopener noreferrer" class="underline font-medium">Unison</a>,
+			and
+			<a href="https://github.com/tranxuanthang/lrcget" target="_blank" rel="noopener noreferrer" class="underline font-medium">LRCGET</a>
+			is the actively maintained LRCLIB publisher, so LRCLIBup duplicates both.
+			This site still works, but it will not get updates. To contribute lyrics to Better Lyrics, use
+			<a href="https://unison.betterlyrics.org" target="_blank" rel="noopener noreferrer" class="underline font-medium">Unison</a>.
+			To publish lyrics to LRCLIB, use
+			<a href="https://github.com/tranxuanthang/lrcget" target="_blank" rel="noopener noreferrer" class="underline font-medium">LRCGET</a>.
+		</p>
+	</div>
+</div>
+
 <div class="min-h-screen bg-[#E0E7FF] text-indigo-900 p-6">
 	<div class="max-w-2xl mx-auto">
 		<div

@@ -1,5 +1,11 @@
 # LRCLIBup
 
+> [!WARNING]
+> **LRCLIBup is deprecated.** Better Lyrics now has its own lyrics platform, [Unison](https://unison.betterlyrics.org), and [LRCGET](https://github.com/tranxuanthang/lrcget) is the actively maintained LRCLIB publisher, so LRCLIBup duplicates both. This repository is archived and gets no further updates. [lrclibup.boidu.dev](https://lrclibup.boidu.dev) stays online.
+>
+> - To contribute lyrics to Better Lyrics, use [Unison](https://unison.betterlyrics.org).
+> - To publish lyrics to LRCLIB, use [LRCGET](https://github.com/tranxuanthang/lrcget).
+
 A modern web interface for publishing lyrics to the LRCLIB database. Built with Svelte and TailwindCSS.
 
 <img width="1552" alt="image" src="https://github.com/user-attachments/assets/f8a176e3-029e-44a8-909c-c23e6180fdd0" />
