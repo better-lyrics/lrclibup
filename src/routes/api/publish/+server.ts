@@ -39,6 +39,9 @@ export const POST: RequestHandler = async ({ request }) => {
     }
   }
 
+  const plainLyrics = data.plainLyrics?.trim() || "";
+  const syncedLyrics = data.syncedLyrics?.trim() || "";
+
   try {
     const response = await fetch("https://lrclib.net/api/publish", {
       method: "POST",
@@ -53,8 +56,10 @@ export const POST: RequestHandler = async ({ request }) => {
         artistName: data.artistName.trim(),
         albumName: data.albumName?.trim() || "",
         duration: data.duration ? parseInt(data.duration, 10) : undefined,
-        plainLyrics: data.plainLyrics?.trim() || "",
-        syncedLyrics: data.syncedLyrics?.trim() || "",
+        plainLyrics,
+        // LRCLIB stores empty fields as "no lyrics", not as instrumental: it needs this marker.
+        syncedLyrics:
+          plainLyrics || syncedLyrics ? syncedLyrics : "[au: instrumental]",
       }),
     });
 
